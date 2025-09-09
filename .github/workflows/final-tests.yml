@@ -1,0 +1,43 @@
+name: Final Tests
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 5 * * *"   # runs ~daily (05:30 UTC); okay for post-deadline sweep
+env:
+  DUE_DATE_UTC: "2025-09-20T23:59:00Z"  # <-- EDIT this once in your starter repo
+
+jobs:
+  final:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deadline
+        id: gate
+        run: |
+          now=$(date -u +%s)
+          due=$(date -u -d "$DUE_DATE_UTC" +%s)
+          if [ "$now" -lt "$due" ]; then
+            echo "Too early for final tests."
+            echo "run_final=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "run_final=true" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run_final == 'true'
+      - uses: actions/setup-java@v4
+        if: steps.gate.outputs.run_final == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+      # OPTION A (simple): run a larger local suite you include in the repo
+      - name: Run final tests
+        if: steps.gate.outputs.run_final == 'true'
+        run: mvn -q -Dtest='*Basic*,*Final*' test
+      # OPTION B (hidden tests) — optional pattern:
+      # - name: Fetch hidden tests
+      #   if: steps.gate.outputs.run_final == 'true'
+      #   env:
+      #     GH_TOKEN: ${{ secrets.HIDDEN_TESTS_TOKEN }}
+      #   run: |
+      #     gh repo clone your-org/private-ll-tests hidden-tests
+      #     cp -r hidden-tests/src/test/java/* src/test/java/
+      #     mvn -q -Dtest='*' test
